@@ -12,7 +12,7 @@ import (
 func Handler(c Cache, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		url := req.URL.String()
-		r, w, err := c.Get(url)
+		r, w, err := c.Get(url, 0)
 		if err != nil {
 			h.ServeHTTP(rw, req)
 			return

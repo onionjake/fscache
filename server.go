@@ -83,7 +83,7 @@ func (s *server) exists(c net.Conn, key string) {
 }
 
 func (s *server) get(c net.Conn, key string) {
-	r, w, err := s.c.Get(key)
+	r, w, err := s.c.Get(key, 0)
 	if err != nil {
 		return // handle this better
 	}
@@ -108,7 +108,7 @@ type remote struct {
 	raddr string
 }
 
-func (rmt *remote) Get(key string) (r io.ReadCloser, w io.WriteCloser, err error) {
+func (rmt *remote) Get(key string, size_hint int64) (r io.ReadCloser, w io.WriteCloser, err error) {
 	c, err := net.Dial("tcp", rmt.raddr)
 	if err != nil {
 		return nil, nil, err

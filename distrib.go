@@ -68,8 +68,8 @@ type partition struct {
 	distributor Distributor
 }
 
-func (p *partition) Get(key string) (io.ReadCloser, io.WriteCloser, error) {
-	return p.distributor.GetCache(key).Get(key)
+func (p *partition) Get(key string, size_hint int64) (io.ReadCloser, io.WriteCloser, error) {
+	return p.distributor.GetCache(key).Get(key, size_hint)
 }
 
 func (p *partition) Remove(key string) error {

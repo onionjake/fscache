@@ -29,7 +29,7 @@ type FileSystem interface {
 	// The reader may return io.EOF when reaches the end of written content, but
 	// if more content is written and Read is called again, it must continue
 	// reading the data.
-	Open(name string) (io.ReadCloser, error)
+	Open(name string) (ReadStatSeekerCloser, error)
 
 	// Remove takes a File.Name() and deletes the underlying file.
 	// It does not have to worry about concurrent use, the Cache will wait
@@ -125,7 +125,7 @@ func (fs *stdFs) create(name string) (File, error) {
 	return os.OpenFile(filepath.Join(fs.root, name), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 }
 
-func (fs *stdFs) Open(name string) (io.ReadCloser, error) {
+func (fs *stdFs) Open(name string) (ReadStatSeekerCloser, error) {
 	return os.Open(name)
 }
 

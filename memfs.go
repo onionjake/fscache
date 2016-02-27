@@ -3,7 +3,7 @@ package fscache
 import (
 	"bytes"
 	"errors"
-	"io"
+	"os"
 	"sync"
 	"time"
 )
@@ -50,7 +50,7 @@ func (fs *memFS) Create(name string) (File, error) {
 	return f, nil
 }
 
-func (fs *memFS) Open(name string) (io.ReadCloser, error) {
+func (fs *memFS) Open(name string) (ReadStatSeekerCloser, error) {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	if f, ok := fs.files[name]; ok {
@@ -113,6 +113,14 @@ func (r *memReader) Read(p []byte) (n int, err error) {
 	n, err = bytes.NewReader(r.Bytes()[r.n:]).Read(p)
 	r.n += n
 	return n, err
+}
+
+func (r *memReader) Stat() (os.FileInfo, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *memReader) Seek(offset int64, whence int) (int64, error) {
+	return 0, errors.New("not implemented")
 }
 
 func (r *memReader) Close() error {

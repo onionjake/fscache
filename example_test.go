@@ -22,7 +22,7 @@ func Example() {
 
 	// Get() and it's streams can be called concurrently but just for example:
 	for i := 0; i < 3; i++ {
-		r, w, err := c.Get("stream")
+		r, w, err := c.Get("stream", 0)
 		if err != nil {
 			log.Fatal(err.Error())
 		}

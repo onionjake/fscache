@@ -16,12 +16,12 @@ func NewLayered(caches ...Cache) Cache {
 	return &layeredCache{layers: caches}
 }
 
-func (l *layeredCache) Get(key string) (r io.ReadCloser, w io.WriteCloser, err error) {
+func (l *layeredCache) Get(key string, size_hint int64) (r io.ReadCloser, w io.WriteCloser, err error) {
 	var last io.ReadCloser
 	var writers []io.WriteCloser
 
 	for i, layer := range l.layers {
-		r, w, err = layer.Get(key)
+		r, w, err = layer.Get(key, size_hint)
 		if err != nil {
 			if len(writers) > 0 {
 				last.Close()

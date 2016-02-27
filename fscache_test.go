@@ -184,7 +184,7 @@ func TestReload(t *testing.T) {
 		t.Error(err.Error())
 		return
 	}
-	r, w, err := c.Get("stream")
+	r, w, err := c.Get("stream", 0)
 	if err != nil {
 		t.Error(err.Error())
 		return
@@ -225,7 +225,7 @@ func TestReaper(t *testing.T) {
 	}
 	defer c.Clean()
 
-	r, w, err := c.Get("stream")
+	r, w, err := c.Get("stream", 0)
 	w.Write([]byte("hello"))
 	w.Close()
 	io.Copy(ioutil.Discard, r)
@@ -261,7 +261,7 @@ func TestReaper(t *testing.T) {
 func TestReaperNoExpire(t *testing.T) {
 	testCaches(t, func(c Cache) {
 		defer c.Clean()
-		r, w, err := c.Get("stream")
+		r, w, err := c.Get("stream", 0)
 		if err != nil {
 			t.Error(err.Error())
 			t.FailNow()
@@ -288,7 +288,7 @@ func TestSanity(t *testing.T) {
 	testCaches(t, func(c Cache) {
 		defer c.Clean()
 
-		r, w, err := c.Get(longString)
+		r, w, err := c.Get(longString, 0)
 		if err != nil {
 			t.Error(err.Error())
 			return
@@ -314,7 +314,7 @@ func TestConcurrent(t *testing.T) {
 	testCaches(t, func(c Cache) {
 		defer c.Clean()
 
-		r, w, err := c.Get("stream")
+		r, w, err := c.Get("stream", 0)
 		r.Close()
 		if err != nil {
 			t.Error(err.Error())
@@ -328,7 +328,7 @@ func TestConcurrent(t *testing.T) {
 		}()
 
 		if c.Exists("stream") {
-			r, _, err := c.Get("stream")
+			r, _, err := c.Get("stream", 0)
 			if err != nil {
 				t.Error(err.Error())
 				return

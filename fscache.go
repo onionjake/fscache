@@ -16,7 +16,7 @@ type Cache interface {
 	// If the key does exist, w == nil.
 	// r will always be non-nil as long as err == nil and you must close r when you're done reading.
 	// Get can be called concurrently, and writing and reading is concurrent safe.
-	Get(key string) (io.ReadCloser, io.WriteCloser, error)
+	Get(key string, size_hint int64) (io.ReadCloser, io.WriteCloser, error)
 
 	// Remove deletes the stream from the cache, blocking until the underlying
 	// file can be deleted (all active streams finish with it).
@@ -118,7 +118,7 @@ func (c *cache) Exists(key string) bool {
 	return ok
 }
 
-func (c *cache) Get(key string) (r io.ReadCloser, w io.WriteCloser, err error) {
+func (c *cache) Get(key string, size_hint int64) (r io.ReadCloser, w io.WriteCloser, err error) {
 	c.mu.RLock()
 	f, ok := c.files[key]
 	if ok {
@@ -137,7 +137,7 @@ func (c *cache) Get(key string) (r io.ReadCloser, w io.WriteCloser, err error) {
 		return r, nil, err
 	}
 
-	f, err = c.newFile(key)
+	f, err = c.newFile(key, size_hint)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -175,24 +175,26 @@ func (c *cache) Clean() error {
 }
 
 type cachedFile struct {
-	fs   FileSystem
-	name string
-	cnt  int64
-	grp  sync.WaitGroup
-	w    io.WriteCloser
-	b    *broadcaster
+	fs        FileSystem
+	name      string
+	cnt       int64
+	grp       sync.WaitGroup
+	w         io.WriteCloser
+	b         *broadcaster
+	size_hint int64
 }
 
-func (c *cache) newFile(name string) (*cachedFile, error) {
+func (c *cache) newFile(name string, size_hint int64) (*cachedFile, error) {
 	f, err := c.fs.Create(name)
 	if err != nil {
 		return nil, err
 	}
 	cf := &cachedFile{
-		fs:   c.fs,
-		name: f.Name(),
-		w:    f,
-		b:    newBroadcaster(),
+		fs:        c.fs,
+		name:      f.Name(),
+		w:         f,
+		b:         newBroadcaster(),
+		size_hint: size_hint,
 	}
 	cf.grp.Add(1)
 	atomic.AddInt64(&cf.cnt, 1)
@@ -209,18 +211,19 @@ func (c *cache) oldFile(name string) *cachedFile {
 	}
 }
 
-func (f *cachedFile) next() (r io.ReadCloser, err error) {
-	r, err = f.fs.Open(f.name)
+func (f *cachedFile) next() (r ReadSeekerCloser, err error) {
+	t, err := f.fs.Open(f.name)
 	if err != nil {
 		return nil, err
 	}
 	f.grp.Add(1)
 	atomic.AddInt64(&f.cnt, 1)
 	return &cacheReader{
-		grp: &f.grp,
-		cnt: &f.cnt,
-		r:   r,
-		b:   f.b,
+		grp:       &f.grp,
+		cnt:       &f.cnt,
+		r:         t,
+		size_hint: f.size_hint,
+		b:         f.b,
 	}, nil
 }
 
@@ -238,11 +241,24 @@ func (f *cachedFile) Close() error {
 	return f.w.Close()
 }
 
+//TODO: rename this to CachedFile?
+type ReadStatSeekerCloser interface {
+	io.ReadCloser
+	io.Seeker
+	Stat() (os.FileInfo, error)
+}
+
+type ReadSeekerCloser interface {
+	io.ReadCloser
+	io.Seeker
+}
+
 type cacheReader struct {
-	r   io.ReadCloser
-	grp *sync.WaitGroup
-	cnt *int64
-	b   *broadcaster
+	r         ReadStatSeekerCloser
+	grp       *sync.WaitGroup
+	cnt       *int64
+	b         *broadcaster
+	size_hint int64
 }
 
 func (r *cacheReader) Read(p []byte) (n int, err error) {
@@ -270,6 +286,44 @@ func (r *cacheReader) Read(p []byte) (n int, err error) {
 		}
 
 	}
+}
+
+func (r *cacheReader) Seek(offset int64, whence int) (n int64, err error) {
+	// ServeContent uses seek to see how large the
+	// file is going to be up front, but we don't
+	// want to really seek the file handle there
+	// because everything isn't written yet, so
+	// fake it and just return the final size.
+	// If it is any other parameters than we will
+	// block until at least the seek location is
+	// written.
+	if offset == 0 && whence == os.SEEK_END {
+		return r.size_hint, nil
+	}
+
+	r.b.RLock()
+	defer r.b.RUnlock()
+
+	for {
+
+		n, err = r.r.Seek(offset, whence)
+
+		if r.b.IsOpen() { // file is still being written to
+
+			if n != 0 && err == nil { // successful seek
+				return n, nil
+			} else { // seek position not written yet, wait for it
+				r.b.RUnlock()
+				r.b.Wait()
+				r.b.RLock()
+			}
+
+		} else { // file is closed, just return
+			return n, err
+		}
+
+	}
+
 }
 
 func (r *cacheReader) Close() error {
